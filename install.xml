@@ -1,0 +1,26 @@
+<Configuration ID="41d6b959-8508-4e35-ba3d-362dd9fc1de7">
+  <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE">
+    <Product ID="O365BusinessRetail">
+      <Language ID="en-gb" />
+      <ExcludeApp ID="Groove" />
+      <ExcludeApp ID="Lync" />
+      <ExcludeApp ID="OneDrive" />
+      <ExcludeApp ID="Publisher" />
+    </Product>
+    <Product ID="ProofingTools">
+      <Language ID="da-dk" />
+      <Language ID="nl-nl" />
+      <Language ID="fr-fr" />
+      <Language ID="de-de" />
+      <Language ID="lb-lu" />
+      <Language ID="sv-se" />
+    </Product>
+  </Add>
+  <Updates Enabled="TRUE" />
+  <RemoveMSI />
+  <AppSettings>
+    <User Key="software\microsoft\office\16.0\common" Name="qmenable" Value="0" Type="REG_DWORD" App="office16" Id="L_EnableCustomerExperienceImprovementProgram" />
+    <User Key="software\microsoft\office\16.0\common" Name="updatereliabilitydata" Value="0" Type="REG_DWORD" App="office16" Id="L_UpdateReliabilityPolicy" />
+  </AppSettings>
+  <Display Level="None" AcceptEULA="TRUE" />
+</Configuration>
