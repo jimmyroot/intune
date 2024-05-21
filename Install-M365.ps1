@@ -1,4 +1,7 @@
+# Declare this to be an advanced function (access extra built in pwsh stuff) 
 [CmdletBinding()]
+
+# Set the parameters we can call the script with e.g. ( -RemoveExisting )
 param(
     # Specify this to use a pre-existing XML file
     [String]
@@ -13,11 +16,14 @@ param(
     $CleanupInstallFiles
 )
 
+# Begin block, contains intialization code for the script, functions are also
+# declared here
 begin {
+    # Set script preferences
     $VerbosePreference = 'Continue'
     $ErrorActionPreference = 'Stop'
 
-    # Creates an XML file for a new installation
+    # Fucntion: Creates a new XML file from scratch to use with M365 setup.exe
     function New-InstallXMLFile {
         Write-Verbose 'Creating new XML file'
         $InstallXML = [XML]@"
@@ -49,12 +55,12 @@ begin {
                 <Display Level="None" AcceptEULA="TRUE" />
             </Configuration>
 "@
-        # Save the above as .xml file
+        # Save the above as an .xml file
         $Path = Join-Path $OfficeInstallDownloadPath 'Install.xml'
         $InstallXML.Save($Path)
     }    
 
-    # Creates an XML file to remove any pre-existing installation
+    # Function: Create an XML file to remove office, to be used with M365 setup.exe
     function New-UninstallXMLFile {
         Write-Verbose 'Creating Uninstall.xml file...'
         $XML = [XML]@"
@@ -73,7 +79,7 @@ begin {
         $Path
     }
 
-    # Get the URL of the Office Deployment Tool
+    # Function: Return the current URL of the Office Deployment Tool
     function Get-ODTURL {
         [String]$MSWebPage = Invoke-RestMethod 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117'
         $MSWebPage | ForEach-Object {
@@ -83,7 +89,7 @@ begin {
         }
     }
 
-    # Test if we are executing in elevated context
+    # Function: Test if this script is running in an elevated context
     function Test-IsElevated {
         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $principal = New-Object System.Security.Principal.WindowsPrincipal($id)
@@ -94,6 +100,8 @@ begin {
         }
     }
 
+    # Function: Test M365 installed or not. Looks in the registry to see if there are
+    # keys indicating the presence of one or more M365 products
     function Test-M365Installed {
         Write-Verbose 'Checking for M365 Apps...'
 
@@ -101,9 +109,10 @@ begin {
             'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\',
             'HKLM:SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\'
         )
-    
+
+        # Create an arraylist, use this to store any relevant reg keys we find
         $InstalledProducts = [System.Collections.ArrayList]::new()
-    
+        
         foreach ($Key in (Get-ChildItem $UninstallRegKeys)) {
             If ($Key.GetValue('DisplayName') -like '*Microsoft 365*') {
                 $Product = $Key.GetValue('DisplayName')
@@ -124,6 +133,7 @@ begin {
         }
     }
 
+    # Function: Remove all M365 apps
     function Remove-M365Apps {
         If (-not(Test-M365Installed)) {
             Write-Warning 'M365 App removal was requested, however none are present. Continuing...'
@@ -154,20 +164,22 @@ begin {
     }
 }
 
+# Process block, main script functionality goes here
 process {
 
-    # Test for admin
+    # Test for admin context, exit if false
     If (-not (Test-IsElevated)) {
         Write-Error -Message 'Non-elevated context detected. Please re-run this script with elevated permissions.'
+        Exit 1
     }
 
-    # Create our new working directory
+    # Create a new working directory
     If (-not (Test-Path $OfficeInstallDownloadPath)) {
         New-Item -ItemType Directory -Path $OfficeInstallDownloadPath | Out-Null
     }
 
     # Check whether an XML file was specified, if not, create one. If one was specified,
-    # check if it exists
+    # check if it exists before proceeding, exit if it's not found
     If (-not($RemoveOnly)) {
         If (-not($ConfigurationXMLFile)) {
             New-InstallXMLFile
@@ -184,11 +196,11 @@ process {
         }
     }
 
+    # Get the ODT URL
     $ODTInstallerURL = Get-ODTURL
 
-    # Download the ODT Installer
+    # Download the Office Deployment Tool
     Write-Verbose 'Downloading the Office Deployment Tool...'
-
     try {
         $params = @{
             Uri = $ODTInstallerURL
@@ -203,7 +215,7 @@ process {
         exit 1
     }
 
-    # Run the ODT
+    # Extract the Office Deployment Tool
     try {
         Write-Verbose 'Running the Office Deployment Tool...'
         $ODTSetup = Join-Path $OfficeInstallDownloadPath 'ODTSetup.exe'
@@ -216,12 +228,12 @@ process {
         exit 1
     }
 
-    # Here's where we remove any existing installations, if a flag was set
+    # Try to remove M365 apps if the script was called with -RemoveExisting or -RemoveOnly
     If ($RemoveExisting -or $RemoveOnly) {
         Remove-M365Apps
     }
 
-    # Run the M365 Apps installer
+    # Download and install office (as long as the script wasn't called with -RemoveOnly)
     If (-not($RemoveOnly)) {
         try {
             Write-Verbose 'Downloading and installing Microsoft 365 Apps for business...'
@@ -234,7 +246,7 @@ process {
             Write-Warning $_
         }
 
-        # Test if M365 Apps were installed successfully
+        # Test if M365 Apps were installed successfully, store result in $OfficeWasInstalled ($true or $false)
         $OfficeWasInstalled = Test-M365Installed
     }
     Else {
@@ -243,10 +255,12 @@ process {
 }
 
 end {
+    # If cleanup flag was set, remove the installation files
     If ($CleanupInstallFiles) {
         Remove-Item -Path $OfficeInstallDownloadPath -Force -Recurse
     }
 
+    # If -RemoveOnly was not set, output the result of the attempted Installation
     If (-not($RemoveOnly)) {
         If ($OfficeWasInstalled) {
             Write-Host "Success! Selected products were successfully installed"
