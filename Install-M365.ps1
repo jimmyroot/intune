@@ -168,21 +168,22 @@ process {
 
     # Check whether an XML file was specified, if not, create one. If one was specified,
     # check if it exists
-    If (-not($ConfigurationXMLFile)) {
-        New-InstallXMLFile
-    } else {
-        If (-not(Test-Path $ConfigurationXMLFile)) {
-            Write-Warning 'The configuration XML file specified is not a valid file.'
-            Write-Warning 'Please verify that the path is correct and try again.'
-            Exit 1
-        }
-        Else {
-            Write-Verbose 'The specified XML file appears to be valid, continuing...'
+    If (-not($RemoveOnly)) {
+        If (-not($ConfigurationXMLFile)) {
+            New-InstallXMLFile
+            $ConfigurationXMLFile = Join-Path $OfficeInstallDownloadPath 'Install.xml'
+        } else {
+            If (-not(Test-Path $ConfigurationXMLFile)) {
+                Write-Warning 'The configuration XML file specified is not a valid file.'
+                Write-Warning 'Please verify that the path is correct and try again.'
+                Exit 1
+            }
+            Else {
+                Write-Verbose 'The specified XML file appears to be valid, continuing...'
+            }
         }
     }
 
-    # This will work, but only if the supplied XML file is called 'Install.xml' - needs testing
-    $ConfigurationXMLFile = Join-Path $OfficeInstallDownloadPath 'Install.xml'
     $ODTInstallerURL = Get-ODTURL
 
     # Download the ODT Installer
