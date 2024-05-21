@@ -47,7 +47,6 @@ begin {
                     </Product>
                 </Add>
                 <Updates Enabled="TRUE" />
-                <RemoveMSI />
                 <AppSettings>
                     <User Key="software\microsoft\office\16.0\common" Name="qmenable" Value="0" Type="REG_DWORD" App="office16" Id="L_EnableCustomerExperienceImprovementProgram" />
                     <User Key="software\microsoft\office\16.0\common" Name="updatereliabilitydata" Value="0" Type="REG_DWORD" App="office16" Id="L_UpdateReliabilityPolicy" />
