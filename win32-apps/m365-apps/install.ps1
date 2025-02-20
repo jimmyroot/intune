@@ -22,6 +22,9 @@ begin {
     # Set script preferences
     $VerbosePreference = 'Continue'
     $ErrorActionPreference = 'Stop'
+    $LogFolder = Join-Path $OfficeInstallDownloadPath 'Logs'
+    $LogFileName = (Get-Date -UFormat "%d-%m-%Y") + ".log"
+    $LogPath = Join-Path $LogFolder $LogFileName
 
     # Fucntion: Creates a new XML file from scratch to use with M365 setup.exe
     function New-InstallXMLFile {
@@ -160,6 +163,21 @@ begin {
         Else {
             Write-Warning 'Unable to install M365 Apps. Continuing anyway, but will probably fail...'
         }
+    }
+
+    # Function: Custom logging
+    Function Write-Log {
+        param(
+            [Paramater(Mandatory=$True)]
+            [array]$LogOutput,
+            [Paramater(Mandatory=$True)]
+            [string]$Path
+        )
+        $currentDate = (Get-Date -UFormat "%d-%m-%T")
+        $currentTime = (Get-Date -UFormat "%T")
+        $logOutput = $logOutput -join (" ")
+        
+        "[$currentDate $currentTime] $logOutput" | Out-File $Path -Append
     }
 }
 
