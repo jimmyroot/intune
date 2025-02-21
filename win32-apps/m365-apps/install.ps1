@@ -209,6 +209,7 @@ process {
     }
     Else {
         Write-Log -LogOutput "We are admin, let's gooo..." -Path $LogPath
+    }
 
     # Create a new working directory
     If (-not (Test-Path $OfficeInstallDownloadPath)) {
