@@ -199,12 +199,16 @@ begin {
 # Process block, main script functionality goes here
 process {
 
+    Write-Log -LogOutput "Initializing, checking if we are admin..." -Path $LogPath
+    
     # Test for admin context, exit if false
     If (-not (Test-IsElevated)) {
         # Write-Error -Message 'Non-elevated context detected. Please re-run this script with elevated permissions.'
-        Write-Log -LogOutput "Exiting due to lack of elevated permissions, run again as admin" -Path $LogPath
+        Write-Log -LogOutput "We're not admin, exiting..." -Path $LogPath
         Exit 1
     }
+    Else {
+        Write-Log -LogOutput "We are admin, let's gooo..." -Path $LogPath
 
     # Create a new working directory
     If (-not (Test-Path $OfficeInstallDownloadPath)) {
