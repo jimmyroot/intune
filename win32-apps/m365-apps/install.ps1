@@ -25,6 +25,7 @@ begin {
     $LogFolder = Join-Path $OfficeInstallDownloadPath 'Logs'
     $LogFileName = (Get-Date -UFormat "%d-%m-%Y") + ".log"
     $LogPath = Join-Path $LogFolder $LogFileName
+    $OfficeWasInstalled = $false
 
     # Fucntion: Creates a new XML file from scratch to use with M365 setup.exe
     function New-InstallXMLFile {
@@ -127,11 +128,11 @@ begin {
             foreach ($Product in $InstalledProducts) {
                 Write-Host "Discovered $Product"
             }
-            return $true
+            $true
         }
         Else {
             Write-Warning '...none found, continuing...'
-            return  $false
+            $false
         }
     }
 
