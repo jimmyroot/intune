@@ -44,7 +44,7 @@ begin {
             <Configuration ID="41d6b959-8508-4e35-ba3d-362dd9fc1de7">
                 <Info Description="IKP Standard M365 Apps Install" />
                 <Add OfficeClientEdition="64" Channel="MonthlyEnterprise" MigrateArch="TRUE">
-                    <Product ID="O365BusinessRetail">
+                    <Product ID="O365ProPlusRetail">
                         <Language ID="en-gb" />
                         <ExcludeApp ID="Groove" />
                         <ExcludeApp ID="Lync" />
