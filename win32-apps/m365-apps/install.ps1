@@ -22,14 +22,24 @@ begin {
     # Set script preferences
     $VerbosePreference = 'Continue'
     $ErrorActionPreference = 'Stop'
-    $LogFolder = Join-Path $OfficeInstallDownloadPath 'Logs'
-    $LogFileName = (Get-Date -UFormat "%d-%m-%Y") + ".log"
-    $LogPath = Join-Path $LogFolder $LogFileName
-    $OfficeWasInstalled = $false
+    $officeInstalled = $false
+    $logsModule = Join-Path $LogFolder $PSScriptRoot 'modules\JN-Logger.psm1'
+    $logsFolder = Join-Path $env:SystemDrive 'IKP\logs'
+    $logsFile = Join-Path $logsFolder 'Install-M365Apps.log'
 
-    # Fucntion: Creates a new XML file from scratch to use with M365 setup.exe
+    Import-Module $logsModule -Force -ErrorAction Stop
+    Initialize-Logging -LogPath $logPath -LogLevel INFO -logToFile:$true -logToConsole:$true
+
+    # I'd like to add the device name here, at a later date
+    Start-LogSection -Title "Initializing M365Apps Installation"
+
+    #region Functions
+
+    # Creates a new XML file from scratch to use with M365 setup.exe
     function New-InstallXMLFile {
-        Write-Verbose 'Creating new XML file'
+        
+        Write-LogInfo -Message "Creating install configuration XML file"
+
         $InstallXML = [XML]@"
             <Configuration ID="41d6b959-8508-4e35-ba3d-362dd9fc1de7">
                 <Info Description="IKP Standard M365 Apps Install" />
@@ -65,7 +75,9 @@ begin {
 
     # Function: Create an XML file to remove office, to be used with M365 setup.exe
     function New-UninstallXMLFile {
-        Write-Verbose 'Creating Uninstall.xml file...'
+
+        Write-LogInfo -Message "Creating uninstall configuration XML file"
+        
         $XML = [XML]@"
         <Configuration>
             <Remove All="TRUE"/>
@@ -86,7 +98,8 @@ begin {
     function Get-ODTURL {
         [String]$MSWebPage = Invoke-RestMethod 'https://www.microsoft.com/en-us/download/confirmation.aspx?id=49117'
         $MSWebPage | ForEach-Object {
-            If ($_ -match 'url=(https://.*officedeploymenttool.*.exe)') {
+            if ($_ -match 'url=(https://.*officedeploymenttool.*.exe)') {
+                Write-LogInfo -Message "Found ODT .exe URL: $($matches[1])"
                 $matches[1]
             }
         }
@@ -94,19 +107,23 @@ begin {
 
     # Function: Test if this script is running in an elevated context
     function Test-IsElevated {
+
+        Write-LogInfo -Message "Are we elevated?"
         $id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         $principal = New-Object System.Security.Principal.WindowsPrincipal($id)
         if ($principal.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)) {
-            Write-Output $true
+            Write-LogInfo -Message "Affirmative, admin context detected"
+            $true
         } else {
-            Write-Output $false
+            Write-LogWarning -Message "Admin context not detected"
+            $false
         }
     }
 
     # Function: Test M365 installed or not. Looks in the registry to see if there are
     # keys indicating the presence of one or more M365 products
     function Test-M365Installed {
-        Write-Verbose 'Checking for M365 Apps...'
+        Write-LogInfo -Message "Testing for the presence of M365 Apps"
 
         $UninstallRegKeys = @(
             'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\',
@@ -117,99 +134,89 @@ begin {
         $InstalledProducts = [System.Collections.ArrayList]::new()
         
         foreach ($Key in (Get-ChildItem $UninstallRegKeys)) {
-            If ($Key.GetValue('DisplayName') -like '*Microsoft 365*') {
+            if ($Key.GetValue('DisplayName') -like '*Microsoft 365*') {
                 $Product = $Key.GetValue('DisplayName')
                 $InstalledProducts.Add($Product) | Out-Null
             }
         }
        
-        If ($InstalledProducts.count -gt 0) {
-            Write-Verbose '...apps found, listing them now...'
+        if ($InstalledProducts.count -gt 0) {
+            Write-LogInfo -Message "M365 Apps found, as follows..."
+            
             foreach ($Product in $InstalledProducts) {
-                Write-Host "Discovered $Product"
+                Write-LogInfo -Message "Found: $Product"
+
             }
             $true
         }
-        Else {
-            Write-Warning '...none found, continuing...'
+        else {
+            Write-LogInfo -Message "Didn't find any M365 Apps"
             $false
         }
     }
 
     # Function: Remove all M365 apps
     function Remove-M365Apps {
-        If (-not(Test-M365Installed)) {
-            Write-Warning 'M365 App removal was requested, however none are present. Continuing...'
+        if (-not(Test-M365Installed)) {
+            Write-LogWarning -Message "M365 App removal was requested, however none are present. Continuing..."
             return
         }
 
         $UninstallXML = New-UninstallXMLFile
 
         try {
-            Write-Verbose 'Attempting to remove M365 Apps, please be patient...'
-            $Setup = Join-Path $OfficeInstallDownloadPath 'setup.exe'
-            Write-Host $Setup
+            Write-LogInfo -Message "Attempting to remove M365 Apps, please be patient..."
+            $setupFilePath = Join-Path $OfficeInstallDownloadPath 'setup.exe'
+            # Write-Host $setupFilePath
             $Arguments = "/configure $UninstallXML"
-            $Silent = Start-Process $Setup -ArgumentList $Arguments -Wait -PassThru
+            $process = Start-Process $setupFilePath -ArgumentList $Arguments -Wait -PassThru
         }
         catch {
-            Write-Warning 'Error running Office365 Uninstaller. The error is below:'
-            Write-Warning $_
-            exit 1
+            Write-LogError -Message "Error uninstalling M365 Apps. The error was: $_"
+            Exit
         }
 
-        If (-not(Test-M365Installed)) {
-            Write-Verbose 'Office removal was successful, continuing...'
+        if (-not(Test-M365Installed)) {
+            Write-LogInfo "Successfully removed M365 Apps"
         }
-        Else {
-            Write-Warning 'Unable to install M365 Apps. Continuing anyway, but will probably fail...'
+        else {
+            Write-Warning "Couldn't remove M365 Apps; continuing anyway, but don't expect too much..."
         }
     }
 
-    # Function: Custom logging
-    Function Write-Log {
-        param(
-            [Paramater(Mandatory=$True)]
-            [array]$LogOutput,
-            [Paramater(Mandatory=$True)]
-            [string]$Path
-        )
-        $currentDate = (Get-Date -UFormat "%d-%m-%T")
-        $currentTime = (Get-Date -UFormat "%T")
-        $logOutput = $logOutput -join (" ")
-        
-        "[$currentDate $currentTime] $logOutput" | Out-File $Path -Append
-    }
+    #endregion
 }
 
 # Process block, main script functionality goes here
 process {
 
     # Test for admin context, exit if false
-    If (-not (Test-IsElevated)) {
-        Write-Error -Message 'Non-elevated context detected. Please re-run this script with elevated permissions.'
+    if (-not (Test-IsElevated)) {
+        Write-LogError -Message 'Exiting...please try again with elevated permissions'
         Exit 1
     }
 
     # Create a new working directory
-    If (-not (Test-Path $OfficeInstallDownloadPath)) {
+    if (-not (Test-Path $OfficeInstallDownloadPath)) {
+        Write-LogInfo -Message "Creating working directory: $OfficeInstallDownloadPath"
         New-Item -ItemType Directory -Path $OfficeInstallDownloadPath | Out-Null
     }
 
-    # Check whether an XML file was specified, if not, create one. If one was specified,
+    # Check whether an XML file was specified, if not, create one. if one was specified,
     # check if it exists before proceeding, exit if it's not found
-    If (-not($RemoveOnly)) {
-        If (-not($ConfigurationXMLFile)) {
+    if (-not($RemoveOnly)) {
+        if (-not($ConfigurationXMLFile)) {
+            Write-LogInfo -Message "Creating new XML installation configuration"
+
             New-InstallXMLFile
             $ConfigurationXMLFile = Join-Path $OfficeInstallDownloadPath 'Install.xml'
         } else {
-            If (-not(Test-Path $ConfigurationXMLFile)) {
-                Write-Warning 'The configuration XML file specified is not a valid file.'
-                Write-Warning 'Please verify that the path is correct and try again.'
+            if (-not(Test-Path $ConfigurationXMLFile)) {
+                Write-LogError 'The configuration XML file specified is not a valid file. Please verify that the path is correct and try again.'
                 Exit 1
             }
-            Else {
-                Write-Verbose 'The specified XML file appears to be valid, continuing...'
+            else {
+                Write-LogInfo 'The specified XML file appears to be valid, continuing...'
             }
         }
     }
@@ -217,79 +224,74 @@ process {
     # Get the ODT URL
     $ODTInstallerURL = Get-ODTURL
 
-    # Download the Office Deployment Tool
-    Write-Verbose 'Downloading the Office Deployment Tool...'
     try {
+        Write-LogInfo 'Attempting to download the Office Deployment Tool...'
+
         $params = @{
             Uri = $ODTInstallerURL
             OutFile = Join-Path $OfficeInstallDownloadPath 'ODTSetup.exe'
         }
         Invoke-WebRequest @params
+        Write-LogInfo 'Success!'
     }
     catch {
-        Write-Warning 'An error occured whilst trying to download the Office Deployment Tool.'
-        Write-Warning 'Please verify that the below link is valid:'
-        Write-Warning $ODTInstallerURL
-        exit 1
+        Write-LogError -Message "An error occured whilst trying to download the Office Deployment Tool.`nPlease make sure the following link is valid: $ODTInstallerURL"
+        Exit 1
     }
 
     # Extract the Office Deployment Tool
     try {
-        Write-Verbose 'Running the Office Deployment Tool...'
-        $ODTSetup = Join-Path $OfficeInstallDownloadPath 'ODTSetup.exe'
+        Write-LogInfo -Message "Attemping to extract the M365 download tool"
+        $ODTSetup = Join-Path $OfficeInstallDownloadPath "ODTSetup.exe"
         $Arguments = "/quiet /extract:$OfficeInstallDownloadPath"
         Start-Process $ODTSetup -ArgumentList $Arguments -Wait
     }
     catch {
-        Write-Warning 'An error occurred whilst running the Office Deployment tool. The error is below:'
-        Write-Warning $_
-        exit 1
+        Write-LogError -Message "An error occurred whilst extracting the tool. The error is: $_"
+        Exit 1
     }
 
     # Try to remove M365 apps if the script was called with -RemoveExisting or -RemoveOnly
-    If ($RemoveExisting -or $RemoveOnly) {
+    if ($RemoveExisting -or $RemoveOnly) {
         Remove-M365Apps
     }
 
     # Download and install office (as long as the script wasn't called with -RemoveOnly)
-    If (-not($RemoveOnly)) {
+    if (-not($RemoveOnly)) {
         try {
-            Write-Verbose 'Downloading and installing Microsoft 365 Apps for business...'
-            $Setup = Join-Path $OfficeInstallDownloadPath 'setup.exe'
-            $Arguments = "/configure $ConfigurationXMLFile"
-            $Silent = Start-Process $Setup -ArgumentList $Arguments -Wait -PassThru
+            Write-LogInfo -Message "Downloading and installing M365 Apps"
+            $setupFilePath = Join-Path $OfficeInstallDownloadPath "setup.exe"
+            $arguments = "/configure $ConfigurationXMLFile"
+            $process = Start-Process $setupFilePath -ArgumentList $arguments -Wait -PassThru
         }
         catch {
-            Write-Warning 'Error running the Office install. The error is below:'
-            Write-Warning $_
+            Write-LogWarning -Message "Error installing M365 Apps. The error is: $_"
         }
 
-        # Test if M365 Apps were installed successfully, store result in $OfficeWasInstalled ($true or $false)
-        $OfficeWasInstalled = Test-M365Installed
+        # Test if M365 Apps were installed successfully, store result in $officeInstalled ($true or $false)
+        $officeInstalled = Test-M365Installed
     }
-    Else {
-        Write-Verbose 'No more work to do because -RemoveOnly was specified'
+    else {
+        Write-LogInfo -Message 'No more work to do because -RemoveOnly was specified'
     }
 }
 
 end {
-    # If cleanup flag was set, remove the installation files
-    If ($CleanupInstallFiles) {
+    # if cleanup flag was set, remove the installation files
+    if ($CleanupInstallFiles) {
+        Write-LogInfo -Message "Cleaning up installation directory"
         Remove-Item -Path $OfficeInstallDownloadPath -Force -Recurse
     }
 
-    # If -RemoveOnly was not set, output the result of the attempted Installation
-    If (-not($RemoveOnly)) {
-        If ($OfficeWasInstalled) {
-            Write-Host "Success! Selected products were successfully installed"
+    # if -RemoveOnly was not set, output the result of the attempted Installation
+    if (-not($RemoveOnly)) {
+        if ($officeInstalled) {
+            Write-LogSuccess -Message "M365 Apps were successfully installed ^_^"
             Exit 0
         }
-        Else {
-            Write-Warning "Failed. Office was not installed. Please troubleshoot and try again"
+        else {
+            Write-LogWarning -Message "Failed to install M365 Apps. Review the logs and try again"
             Exit 1
         }
-    }
-    Else {
-        Exit 0
     }
 }
