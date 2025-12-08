@@ -4,24 +4,19 @@ $isInstalled = $false
 
 if (Test-Path $officeC2RKey) {
     try {
-        $InstalledProducts = Get-ChildItem -Path $OfficeC2RKey | 
-            Get-ItemProperty | 
-            Where-Object { $_.ProductReleaseIds -like "*$productId*" }
-            
-        if ($InstalledProducts -ne $null -and $InstalledProducts.Count -gt 0) {
-            $isInstalled = $true
-        }
+        $isInstalled = (Get-ItemPropertyValue -Path $officeC2RKey -Name ProductReleaseIds).contains($productId)
     }
     catch {
-        # Catch any errors (e.g., registry read issues) and treat it as not detected.
-        # Intune will rely on the Exit 1 code below.
+        # If we can't read the key just fail
+        Exit 1
     }
 }
 if ($IsInstalled) {
-    Write-Output "SUCCESS: Microsoft 365 Apps ($M365ProductReleaseId) detected."
+    Write-Output "[SUCCESS]: Microsoft 365 Apps '$productId' detected."
     Exit 0
 }
 else {
+    # If the key isn't what we expect, fail
     # Write-Output "FAILURE: Microsoft 365 Apps not detected."
     Exit 1
 }
