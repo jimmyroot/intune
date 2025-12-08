@@ -119,36 +119,57 @@ begin {
     }
 
     # Function: Test M365 installed or not. Looks in the registry to see if there are
-    # keys indicating the presence of one or more M365 products
+    # keys indicating the presence of one or more M365 products. Retry the specified number
+    # of times, if not found.
     function Test-M365Installed {
-        Write-LogInfo -Message "Testing for the presence of M365 Apps..."
+        [CmdletBinding()]
+        param() 
 
-        $UninstallRegKeys = @(
+        $maxAttempts = 10
+        $secondsToSleep = 6
+        $attempt = 0
+
+        Write-LogInfo -Message "Starting M365 Apps presence test with up to $maxAttempts retries"
+
+        $uninstallRegKeys = @(
             'HKLM:SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\',
             'HKLM:SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\'
         )
 
-        # Create an arraylist, use this to store any relevant reg keys we find
-        $InstalledProducts = [System.Collections.ArrayList]::new()
+        $installedProducts = @()
         
-        foreach ($Key in (Get-ChildItem $UninstallRegKeys)) {
-            if ($Key.GetValue('DisplayName') -like '*Microsoft 365*') {
-                $Product = $Key.GetValue('DisplayName')
-                $InstalledProducts.Add($Product) | Out-Null
-            }
-        }
-       
-        if ($InstalledProducts.count -gt 0) {
-            Write-LogInfo -Message "...M365 Apps found, as follows:"
-            
-            foreach ($Product in $InstalledProducts) {
-                Write-LogInfo -Message "Found: $Product"
+        do {
+            $Attempt++
+            Write-LogInfo -Message "Attempt $attempt of $maxRetries; Searching 'Uninstall' for evidence of M365 Apps"
 
+            $installedProducts = @(
+                foreach ($key in (Get-ChildItem -Path $uninstallRegKeys -ErrorAction SilentlyContinue)) {
+                    $displayName = $key.GetValue('DisplayName')
+                    if ($displayName -like '*Microsoft 365*') {
+                        $displayName
+                    }
+                }
+            )
+
+            if ($installedProducts.count -gt 0) {
+                Write-LogInfo -Message "M365 apps found on attempt $attempt"
+                break
+            }
+
+            if ($attempt -lt $maxAttempts) {
+                Write-LogInfo -Message "M365 apps not found, yet. We'll try again in $secondsToSleep seconds."
+                Start-Sleep -Seconds $secondsToSleep
+            }
+
+        } until ($attempt -ge $maxAttempts)
+
+        if ($installedProducts.count -gt 0) {
+            foreach ($product in $installedProducts) {
+                Write-LogInfo -Message "M365 package found: $product"
             }
             $true
-        }
-        else {
-            Write-LogInfo -Message "...none found"
+        } else {
+            Write-LogWarning -Message "Failed to find any M365 Apps after $maxAttempts attempts."
             $false
         }
     }
