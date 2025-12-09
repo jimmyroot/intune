@@ -171,7 +171,7 @@ begin {
             }
             $true
         } else {
-            Write-LogWarning -Message "Failed to find any M365 Apps after $maxAttempts attempts."
+            Write-LogInfo -Message "Failed to find any M365 Apps after $maxAttempts attempts."
             $false
         }
     }
