@@ -123,10 +123,12 @@ begin {
     # of times, if not found.
     function Test-M365Installed {
         [CmdletBinding()]
-        param() 
+        param(
+            [switch]$Extended
+        )
 
-        $maxAttempts = 10
-        $secondsToSleep = 6
+        $maxAttempts = if ($Extended) { 10 } else { 3 }
+        $secondsToSleep = if ($Extended) { 6 } else { 2 }
         $attempt = 0
 
         Write-LogInfo -Message "Starting M365 Apps presence test with up to $maxAttempts retries"
@@ -295,7 +297,7 @@ process {
         }
 
         # Test if M365 Apps were installed successfully, store result in $officeInstalled ($true or $false)
-        $officeInstalled = Test-M365Installed
+        $officeInstalled = Test-M365Installed -Extended
     }
     else {
         Write-LogInfo -Message 'No more work to do because -RemoveOnly was specified'
