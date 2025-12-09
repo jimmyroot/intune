@@ -142,7 +142,7 @@ begin {
         
         do {
             $Attempt++
-            Write-LogInfo -Message "Attempt $attempt of $maxRetries; Searching 'Uninstall' for evidence of M365 Apps"
+            Write-LogInfo -Message "Attempt $attempt of $maxAttempts; Searching 'Uninstall' for evidence of M365 Apps"
 
             $installedProducts = @(
                 foreach ($key in (Get-ChildItem -Path $uninstallRegKeys -ErrorAction SilentlyContinue)) {
